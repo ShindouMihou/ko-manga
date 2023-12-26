@@ -29,6 +29,7 @@ object Komanga {
     init {
         Runtime.getRuntime().addShutdownHook(thread {
             runBlocking {
+                logger.debug("Releasing all locks belonging to holder $lockHolder.")
                 close()
             }
         })
