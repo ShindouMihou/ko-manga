@@ -14,15 +14,16 @@ import pw.mihou.komanga.databases.MigrationsDatabase
 import pw.mihou.komanga.exceptions.DuplicateMigrationKeyException
 import pw.mihou.komanga.exceptions.MongoClientNotInitializedException
 import pw.mihou.komanga.interfaces.Migration
+import pw.mihou.komanga.locks.KoLock
 import pw.mihou.komanga.models.MigrationKind
 import pw.mihou.komanga.models.MigrationModel
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
 import kotlin.concurrent.withLock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-// @TODO Add locking mechanism to enforce once-write only.
 // @TODO Add proper documentations.
 object Komanga {
 
@@ -83,103 +84,107 @@ object Komanga {
         val useTransactions = isReplicaSet()
         val database = Komanga.database ?: throw MongoClientNotInitializedException
 
-        val appliedMigrations =  MigrationsDatabase.collection
-            .find(Filters.eq("kind", kind))
-            .allowDiskUse(true)
-            .map { it.id }
-            .toSet()
+        return KoLock.once("rollback@$kind", maxHoldTime = 3.minutes) {
+            val appliedMigrations =  MigrationsDatabase.collection
+                .find(Filters.eq("kind", kind))
+                .allowDiskUse(true)
+                .map { it.id }
+                .toSet()
 
-        val copy = migrations.filter {
-            it.kind == kind
-                    && appliedMigrations.contains(it.name)
-        }.toList()
+            val copy = migrations.filter {
+                it.kind == kind
+                        && appliedMigrations.contains(it.name)
+            }.toList()
 
 
-        for (migration in copy) {
-            val model = MigrationModel(id = migration.name, kind = migration.kind)
-            val ack = model.delete()
-            if (!ack) {
-                logger.warn("Migration ${migration.name} cannot be deleted, it likely doesn't exist somehow?")
-                continue
-            }
-
-            try {
-                val collection = database.getCollection<Document>(migration.collectionName)
-                if (useTransactions && migration.allowTransactions) {
-                    val tAck = transactional {
-                        migration.down(database, collection)
-                    }
-
-                    if (!tAck) {
-                        logger.error("Rollback for ${migration.name} failed to complete. As this was done via transactions, " +
-                                "there was no change with the data.")
-                        model.delete()
-                        return false
-                    }
-                } else {
-                    try {
-                        migration.down(database, collection)
-                    } catch (ex: Exception) {
-                        logger.error("Rollback for ${migration.name} failed to complete. As this was not done with transactions, data changes " +
-                                "may have occurred.", ex)
-                        model.delete()
-                        return false
-                    }
+            for (migration in copy) {
+                val model = MigrationModel(id = migration.name, kind = migration.kind)
+                val ack = model.delete()
+                if (!ack) {
+                    logger.warn("Migration ${migration.name} cannot be deleted, it likely doesn't exist somehow?")
+                    continue
                 }
-            } catch (ex: Exception) {
-                // @reason last defense capture
-                logger.error("Rollback for ${migration.name} failed to complete, due to the following exception: ", ex)
-                return false
-            }
-        }
 
-        return true
+                try {
+                    val collection = database.getCollection<Document>(migration.collectionName)
+                    if (useTransactions && migration.allowTransactions) {
+                        val tAck = transactional {
+                            migration.down(database, collection)
+                        }
+
+                        if (!tAck) {
+                            logger.error("Rollback for ${migration.name} failed to complete. As this was done via transactions, " +
+                                    "there was no change with the data.")
+                            model.delete()
+                            return@once false
+                        }
+                    } else {
+                        try {
+                            migration.down(database, collection)
+                        } catch (ex: Exception) {
+                            logger.error("Rollback for ${migration.name} failed to complete. As this was not done with transactions, data changes " +
+                                    "may have occurred.", ex)
+                            model.delete()
+                            return@once false
+                        }
+                    }
+                } catch (ex: Exception) {
+                    // @reason last defense capture
+                    logger.error("Rollback for ${migration.name} failed to complete, due to the following exception: ", ex)
+                    return@once false
+                }
+            }
+
+            return@once true
+        } ?: false
     }
 
     suspend fun migrate(kind: MigrationKind): Boolean {
         val useTransactions = isReplicaSet()
         val database = Komanga.database ?: throw MongoClientNotInitializedException
 
-        val copy = migrations.filter { it.kind == kind }.toList()
-        for (migration in copy) {
-            val model = MigrationModel(id = migration.name, kind = migration.kind)
-            val ack = model.insert()
-            if (!ack) {
-                logger.warn("Migration ${migration.name} was already completed, skipping.")
-                continue
-            }
-
-            try {
-                val collection = database.getCollection<Document>(migration.collectionName)
-                if (useTransactions && migration.allowTransactions) {
-                    val tAck = transactional {
-                        migration.up(database, collection)
-                    }
-
-                    if (!tAck) {
-                        logger.error("Migration ${migration.name} failed to complete. As this was done via transactions, " +
-                                "there was no change with the data.")
-                        model.delete()
-                        return false
-                    }
-                } else {
-                    try {
-                        migration.up(database, collection)
-                    } catch (ex: Exception) {
-                        logger.error("Migration ${migration.name} failed to complete. As this was not done with transactions, data changes " +
-                                "may have occurred.", ex)
-                        model.delete()
-                        return false
-                    }
+        return KoLock.once("migrate@$kind", maxHoldTime = 3.minutes) {
+            val copy = migrations.filter { it.kind == kind }.toList()
+            for (migration in copy) {
+                val model = MigrationModel(id = migration.name, kind = migration.kind)
+                val ack = model.insert()
+                if (!ack) {
+                    logger.warn("Migration ${migration.name} was already completed, skipping.")
+                    continue
                 }
-            } catch (ex: Exception) {
-                // @reason last defense capture
-                logger.error("Migration ${migration.name} failed to complete, due to the following exception: ", ex)
-                return false
-            }
-        }
 
-        return true
+                try {
+                    val collection = database.getCollection<Document>(migration.collectionName)
+                    if (useTransactions && migration.allowTransactions) {
+                        val tAck = transactional {
+                            migration.up(database, collection)
+                        }
+
+                        if (!tAck) {
+                            logger.error("Migration ${migration.name} failed to complete. As this was done via transactions, " +
+                                    "there was no change with the data.")
+                            model.delete()
+                            return@once false
+                        }
+                    } else {
+                        try {
+                            migration.up(database, collection)
+                        } catch (ex: Exception) {
+                            logger.error("Migration ${migration.name} failed to complete. As this was not done with transactions, data changes " +
+                                    "may have occurred.", ex)
+                            model.delete()
+                            return@once false
+                        }
+                    }
+                } catch (ex: Exception) {
+                    // @reason last defense capture
+                    logger.error("Migration ${migration.name} failed to complete, due to the following exception: ", ex)
+                    return@once false
+                }
+            }
+
+            return@once true
+        } ?: false
     }
 
     private suspend fun transactional(task: suspend () -> Unit): Boolean {

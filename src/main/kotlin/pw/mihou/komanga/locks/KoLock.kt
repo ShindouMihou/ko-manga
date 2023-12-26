@@ -13,6 +13,7 @@ import pw.mihou.komanga.models.LockModel
 import pw.mihou.komanga.mongo.ErrorCodes
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import kotlin.math.max
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -27,6 +28,22 @@ class KoLock internal constructor(private val key: String, private val maxHoldTi
 
     companion object {
         fun of(key: String, maxHoldTime: Duration = Komanga.maxHoldTime) = KoLock(key, maxHoldTime)
+
+        /**
+         * [once] executes the [executable] when the [tryLock] for the [KoLock] with the given [key]
+         * is acquired, this will return null when [tryLock] fails to acquire the lock.
+         */
+        suspend fun <T> once(key: String, maxHoldTime: Duration = Komanga.maxHoldTime, executable: suspend () -> T): T? {
+            val lock = KoLock(key, maxHoldTime)
+            try {
+                if (!lock.tryLock()) {
+                    return null
+                }
+                return executable()
+            } finally {
+                lock.unlock()
+            }
+        }
     }
 
     /**
