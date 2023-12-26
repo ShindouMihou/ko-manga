@@ -6,7 +6,6 @@ import com.mongodb.kotlin.client.coroutine.MongoClient
 import com.mongodb.kotlin.client.coroutine.MongoDatabase
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toSet
-import kotlinx.coroutines.runBlocking
 import org.bson.Document
 import org.slf4j.LoggerFactory
 import pw.mihou.komanga.databases.LocksDatabase
@@ -19,22 +18,12 @@ import pw.mihou.komanga.models.MigrationKind
 import pw.mihou.komanga.models.MigrationModel
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.thread
 import kotlin.concurrent.withLock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 // @TODO Add proper documentations.
 object Komanga {
-
-    init {
-        Runtime.getRuntime().addShutdownHook(thread {
-            runBlocking {
-                logger.debug("Releasing all locks belonging to holder $lockHolder.")
-                close()
-            }
-        })
-    }
 
     @Volatile var client: MongoClient? = null
     @Volatile var database: MongoDatabase? = null
