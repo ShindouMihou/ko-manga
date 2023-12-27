@@ -107,6 +107,8 @@ object Komanga {
                             model.delete()
                             return@once false
                         }
+
+                        logger.info("Rollback for ${migration.name} was completed.")
                     } else {
                         try {
                             migration.down(database, collection)
@@ -165,6 +167,8 @@ object Komanga {
                             return@once false
                         }
                     }
+
+                    logger.info("Migration for ${migration.name} was completed.")
                 } catch (ex: Exception) {
                     // @reason last defense capture
                     logger.error("Migration ${migration.name} failed to complete, due to the following exception: ", ex)
