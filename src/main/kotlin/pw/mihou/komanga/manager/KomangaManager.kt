@@ -34,10 +34,10 @@ object KomangaManager {
                     tasks += { Komanga.rollback(MigrationKind.INDEX) }
                 }
                 "--rollback-data" -> {
-                    tasks += { Komanga.migrate(MigrationKind.DATA) }
+                    tasks += { Komanga.rollback(MigrationKind.DATA) }
                 }
                 "--rollback-collection" -> {
-                    tasks += { Komanga.migrate(MigrationKind.COLLECTION) }
+                    tasks += { Komanga.rollback(MigrationKind.COLLECTION) }
                 }
             }
         }
