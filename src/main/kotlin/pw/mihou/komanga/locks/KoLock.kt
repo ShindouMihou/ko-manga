@@ -41,10 +41,10 @@ class KoLock internal constructor(
             executable: suspend () -> T
         ): T? {
             val lock = KoLock(key, maxHoldTime)
+            if (!lock.tryLock()) {
+                return null
+            }
             try {
-                if (!lock.tryLock()) {
-                    return null
-                }
                 return executable()
             } finally {
                 lock.unlock()
