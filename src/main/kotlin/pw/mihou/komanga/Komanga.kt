@@ -4,6 +4,11 @@ import com.mongodb.MongoServerException
 import com.mongodb.client.model.Filters
 import com.mongodb.kotlin.client.coroutine.MongoClient
 import com.mongodb.kotlin.client.coroutine.MongoDatabase
+import java.util.*
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toSet
 import org.bson.Document
@@ -16,11 +21,6 @@ import pw.mihou.komanga.interfaces.Migration
 import pw.mihou.komanga.locks.KoLock
 import pw.mihou.komanga.models.MigrationKind
 import pw.mihou.komanga.models.MigrationModel
-import java.util.UUID
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 // @TODO Add proper documentations.
 object Komanga {
@@ -74,7 +74,7 @@ object Komanga {
         val database = Komanga.database ?: throw MongoClientNotInitializedException
 
         return KoLock.once("rollback@$kind", maxHoldTime = 3.minutes) {
-            val appliedMigrations =  MigrationsDatabase.collection
+            val appliedMigrations = MigrationsDatabase.collection
                 .find(Filters.eq("kind", kind))
                 .allowDiskUse(true)
                 .map { it.id }
@@ -82,7 +82,7 @@ object Komanga {
 
             val copy = migrations.filter {
                 it.kind == kind
-                        && appliedMigrations.contains(it.name)
+                    && appliedMigrations.contains(it.name)
             }.toList()
 
 
@@ -102,8 +102,10 @@ object Komanga {
                         }
 
                         if (!tAck) {
-                            logger.error("Rollback for ${migration.name} failed to complete. As this was done via transactions, " +
-                                    "there was no change with the data.")
+                            logger.error(
+                                "Rollback for ${migration.name} failed to complete. As this was done via transactions, " +
+                                    "there was no change with the data.",
+                            )
                             model.delete()
                             return@once false
                         }
@@ -111,8 +113,11 @@ object Komanga {
                         try {
                             migration.down(database, collection)
                         } catch (ex: Exception) {
-                            logger.error("Rollback for ${migration.name} failed to complete. As this was not done with transactions, data changes " +
-                                    "may have occurred.", ex)
+                            logger.error(
+                                "Rollback for ${migration.name} failed to complete. As this was not done with transactions, data changes " +
+                                    "may have occurred.",
+                                ex,
+                            )
                             model.delete()
                             return@once false
                         }
@@ -121,7 +126,10 @@ object Komanga {
                     logger.info("Rollback for ${migration.name} was completed.")
                 } catch (ex: Exception) {
                     // @reason last defense capture
-                    logger.error("Rollback for ${migration.name} failed to complete, due to the following exception: ", ex)
+                    logger.error(
+                        "Rollback for ${migration.name} failed to complete, due to the following exception: ",
+                        ex,
+                    )
                     return@once false
                 }
             }
@@ -152,8 +160,10 @@ object Komanga {
                         }
 
                         if (!tAck) {
-                            logger.error("Migration ${migration.name} failed to complete. As this was done via transactions, " +
-                                    "there was no change with the data.")
+                            logger.error(
+                                "Migration ${migration.name} failed to complete. As this was done via transactions, " +
+                                    "there was no change with the data.",
+                            )
                             model.delete()
                             return@once false
                         }
@@ -161,8 +171,11 @@ object Komanga {
                         try {
                             migration.up(database, collection)
                         } catch (ex: Exception) {
-                            logger.error("Migration ${migration.name} failed to complete. As this was not done with transactions, data changes " +
-                                    "may have occurred.", ex)
+                            logger.error(
+                                "Migration ${migration.name} failed to complete. As this was not done with transactions, data changes " +
+                                    "may have occurred.",
+                                ex,
+                            )
                             model.delete()
                             return@once false
                         }
@@ -171,7 +184,10 @@ object Komanga {
                     logger.info("Migration for ${migration.name} was completed.")
                 } catch (ex: Exception) {
                     // @reason last defense capture
-                    logger.error("Migration ${migration.name} failed to complete, due to the following exception: ", ex)
+                    logger.error(
+                        "Migration ${migration.name} failed to complete, due to the following exception: ",
+                        ex,
+                    )
                     return@once false
                 }
             }

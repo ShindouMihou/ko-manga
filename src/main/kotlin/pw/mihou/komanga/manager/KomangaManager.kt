@@ -20,22 +20,27 @@ object KomangaManager {
         val tasks = mutableListOf<KomangaTask>()
         for (raw in args) {
             val arg = raw.lowercase()
-            when(arg) {
+            when (arg) {
                 "--migrate-index" -> {
                     tasks += { Komanga.migrate(MigrationKind.INDEX) }
                 }
+
                 "--migrate-data" -> {
                     tasks += { Komanga.migrate(MigrationKind.DATA) }
                 }
+
                 "--migrate-collection" -> {
                     tasks += { Komanga.migrate(MigrationKind.COLLECTION) }
                 }
+
                 "--rollback-index" -> {
                     tasks += { Komanga.rollback(MigrationKind.INDEX) }
                 }
+
                 "--rollback-data" -> {
                     tasks += { Komanga.rollback(MigrationKind.DATA) }
                 }
+
                 "--rollback-collection" -> {
                     tasks += { Komanga.rollback(MigrationKind.COLLECTION) }
                 }

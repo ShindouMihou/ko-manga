@@ -2,6 +2,10 @@ package pw.mihou.komanga.locks
 
 import com.mongodb.MongoException
 import com.mongodb.client.model.changestream.OperationType
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.singleOrNull
@@ -11,11 +15,6 @@ import pw.mihou.komanga.databases.LocksDatabase
 import pw.mihou.komanga.exceptions.LockIsOwnedByAnotherException
 import pw.mihou.komanga.models.LockModel
 import pw.mihou.komanga.mongo.ErrorCodes
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import kotlin.math.max
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * [KoLock] is a special lock that uses MongoDB as a centralized manager. This works through the use
@@ -24,7 +23,10 @@ import kotlin.time.Duration.Companion.seconds
  * be freed, additionally, it uses another technique called `hold_until` or `max_hold_time` that dictates how
  * long a lock should exist before it can be forcibly unlocked.
  */
-class KoLock internal constructor(private val key: String, private val maxHoldTime: Duration = Komanga.maxHoldTime) {
+class KoLock internal constructor(
+    private val key: String,
+    private val maxHoldTime: Duration = Komanga.maxHoldTime
+) {
 
     companion object {
         fun of(key: String, maxHoldTime: Duration = Komanga.maxHoldTime) = KoLock(key, maxHoldTime)
@@ -33,7 +35,11 @@ class KoLock internal constructor(private val key: String, private val maxHoldTi
          * [once] executes the [executable] when the [tryLock] for the [KoLock] with the given [key]
          * is acquired, this will return null when [tryLock] fails to acquire the lock.
          */
-        suspend fun <T> once(key: String, maxHoldTime: Duration = Komanga.maxHoldTime, executable: suspend () -> T): T? {
+        suspend fun <T> once(
+            key: String,
+            maxHoldTime: Duration = Komanga.maxHoldTime,
+            executable: suspend () -> T
+        ): T? {
             val lock = KoLock(key, maxHoldTime)
             try {
                 if (!lock.tryLock()) {
@@ -107,10 +113,11 @@ class KoLock internal constructor(private val key: String, private val maxHoldTi
                     if (isReplSet) {
                         val stream = Komanga.database?.getCollection<LockModel>("koLocks")?.watch(
                             listOf(
-                                Document("\$match",
-                                    Document("_id", key)
-                                )
-                            )
+                                Document(
+                                    "\$match",
+                                    Document("_id", key),
+                                ),
+                            ),
                         )
                         if (stream != null) {
                             val remainder = lock.holdUntil.toEpochMilli() - now

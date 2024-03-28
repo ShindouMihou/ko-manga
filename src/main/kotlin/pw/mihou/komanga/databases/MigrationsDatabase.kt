@@ -9,8 +9,7 @@ import pw.mihou.komanga.mongo.ErrorCodes
 
 object MigrationsDatabase {
     internal val collection = run {
-        val database = Komanga.database ?:
-            throw MongoClientNotInitializedException
+        val database = Komanga.database ?: throw MongoClientNotInitializedException
 
         return@run database.getCollection<MigrationModel>("koMigrations")
     }

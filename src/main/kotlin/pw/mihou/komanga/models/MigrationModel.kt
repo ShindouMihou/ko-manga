@@ -1,9 +1,9 @@
 package pw.mihou.komanga.models
 
+import java.time.Instant
 import org.bson.codecs.pojo.annotations.BsonId
 import org.bson.codecs.pojo.annotations.BsonProperty
 import pw.mihou.komanga.databases.MigrationsDatabase
-import java.time.Instant
 
 data class MigrationModel(
     @BsonId val id: String,

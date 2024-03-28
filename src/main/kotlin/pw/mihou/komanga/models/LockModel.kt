@@ -1,8 +1,8 @@
 package pw.mihou.komanga.models
 
+import java.time.Instant
 import org.bson.codecs.pojo.annotations.BsonId
 import org.bson.codecs.pojo.annotations.BsonProperty
-import java.time.Instant
 
 data class LockModel(
     @BsonId val id: String,

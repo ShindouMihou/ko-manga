@@ -10,8 +10,7 @@ import pw.mihou.komanga.mongo.ErrorCodes
 
 object LocksDatabase {
     internal val collection = run {
-        val database = Komanga.database ?:
-            throw MongoClientNotInitializedException
+        val database = Komanga.database ?: throw MongoClientNotInitializedException
 
         return@run database.getCollection<LockModel>("koLocks")
     }
